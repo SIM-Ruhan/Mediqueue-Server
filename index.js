@@ -4,13 +4,14 @@ const cors = require("cors")
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const { createRemoteJWKSet, jwtVerify } = require('jose-cjs');
 dotenv.config();
+
 const uri = process.env.URI;
 const app = express()
 const port = process.env.PORT;
+
 app.use(cors())
 app.use(express.json())
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -18,125 +19,204 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   }
 });
-const JWKS =createRemoteJWKSet(
+
+const JWKS = createRemoteJWKSet(
   new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
 )
 
-const  verifyToken = async(req,res,next) =>{
-const authHeader = req?.headers.authorization
-if(!authHeader){
-  return res.status(401).json({
-    message: "Unauthorized"
-  })
+const verifyToken = async (req, res, next) => {
+  const authHeader = req?.headers.authorization
+  if (!authHeader) {
+    return res.status(401).json({ message: "Unauthorized" })
+  }
+  const token = authHeader.split(" ")[1]
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorized" })
+  }
+  try {
+    const { payload } = await jwtVerify(token, JWKS)
+    req.user = payload 
+    next()
+  } catch (error) {
+    return res.status(403).json({ message: "Forbidden" })
+  }
 }
-const token = authHeader.split(" ")[1]
-if(!token){
-  return res.status(401).json({
-    message: "Unauthorized"
-  })
-}
-try{
-const {payload} = await jwtVerify(token, JWKS)
-next()
-}catch(error){
-return res.status(403).json({
-  message: "Forbidden"
-})
-}
-
-
-
-}
-
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
-    // await client.connect();
-    // Send a ping to confirm a successful connection
-    // await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
-
+    console.log("Connected to MongoDB!");
 
     const db = client.db("wanderlust")
-const destinationCollection = db.collection("destinations")
-const bookingCollection = db.collection("bookings")
+    const destinationCollection = db.collection("destinations")
+    const bookingCollection = db.collection("bookings")
 
-app.get("/destination",async (req,res) => {
-  const result = await destinationCollection.find().toArray();
-  res.json(result);
-})
+    // ─── DESTINATION ROUTES ───────────────────────────────────────────────
 
-app.post("/destination", async (req,res)=> {
-  const destinationData = req.body;
-  const result = await destinationCollection.insertOne(destinationData)
-  res.json(result);
-}) 
+    app.get("/destination", async (req, res) => {
+      try {
+        const { limit, email } = req.query;
+        let query = {};
 
-//midleware
-app.get("/destination/:id",verifyToken, async (req,res)=>{
-  const {id} = req.params;
-  const result = await destinationCollection.findOne({_id: new ObjectId(id)})
-  res.json(result);
-});
+        // Added dynamic query parameter fallback filter
+        if (email) {
+          query.userEmail = email;
+        }
 
+        const maxItems = parseInt(limit) || 0;
+        const result = await destinationCollection.find(query).limit(maxItems).toArray();
+        res.json(result);
+      } catch (error) {
+        res.status(500).json({ message: "Failed to fetch destinations" })
+      }
+    })
 
-app.patch("/destination/:id",async(req,res)=>{
-  const {id} = req.params
-  const updateData = req.body
+    app.get("/destination/user/:email", verifyToken, async (req, res) => {
+      try {
+        const { email } = req.params;
 
-  const result = await destinationCollection.updateOne(
-    {_id:new ObjectId(id)},
-      {$set: updateData}
-)
-res.json(result);
-}
-  )
+        if (req.user?.email !== email) {
+          return res.status(403).json({ message: "Forbidden: Email mismatch" })
+        }
 
+        const result = await destinationCollection.find({ userEmail: email }).toArray();
+        res.json(result);
+      } catch (error) {
+        res.status(500).json({ message: "Failed to fetch user destinations" })
+      }
+    })
 
-app.post(`/booking`,verifyToken, async(req,res)=>{
-  const bookingData = req.body;
-  const result = await bookingCollection.insertOne(bookingData);
+    app.get("/destination/:id", verifyToken, async (req, res) => {
+      try {
+        const { id } = req.params;
+        const result = await destinationCollection.findOne({ _id: new ObjectId(id) })
+        if (!result) {
+          return res.status(404).json({ message: "Destination not found" })
+        }
+        res.json(result);
+      } catch (error) {
+        res.status(500).json({ message: "Failed to fetch destination" })
+      }
+    })
 
-  res.json(result);
-})
-app.get("/booking/:studentEmail",verifyToken, async (req, res) => {
-  const { studentEmail } = req.params;
-  const result = await bookingCollection.find({ studentEmail }).toArray();
-  res.json(result);
-});
+    app.post("/destination", verifyToken, async (req, res) => {
+      try {
+        const destinationData = req.body;
 
+        if (req.user?.email !== destinationData.userEmail) {
+          return res.status(403).json({ message: "Forbidden: Email mismatch" })
+        }
 
+        const result = await destinationCollection.insertOne(destinationData)
+        res.json(result);
+      } catch (error) {
+        res.status(500).json({ message: "Failed to create destination" })
+      }
+    })
 
+    app.patch("/destination/:id", verifyToken, async (req, res) => {
+      try {
+        const { id } = req.params;
+        const updateData = req.body;
 
-app.delete("/destination/:id", async(req,res)=> {
-  const {id} = req.params;
-  const result = await destinationCollection.deleteOne({_id: new ObjectId(id)})
-  res.json(result);
-})
+        const existing = await destinationCollection.findOne({ _id: new ObjectId(id) })
+        if (!existing) {
+          return res.status(404).json({ message: "Destination not found" })
+        }
+        if (existing.userEmail !== req.user?.email) {
+          return res.status(403).json({ message: "Forbidden: Not your destination" })
+        }
 
-app.delete("/booking/:bookingId",async(req,res)=>{
-  const {bookingId} = req.params;
-  const result = await bookingCollection.deleteOne({_id: new ObjectId(bookingId)})
-  res.json(result)
+        const result = await destinationCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updateData }
+        )
+        res.json(result);
+      } catch (error) {
+        res.status(500).json({ message: "Failed to update destination" })
+      }
+    })
 
-})
+    app.delete("/destination/:id", verifyToken, async (req, res) => {
+      try {
+        const { id } = req.params;
 
+        const existing = await destinationCollection.findOne({ _id: new ObjectId(id) })
+        if (!existing) {
+          return res.status(404).json({ message: "Destination not found" })
+        }
+        if (existing.userEmail !== req.user?.email) {
+          return res.status(403).json({ message: "Forbidden: Not your destination" })
+        }
+
+        const result = await destinationCollection.deleteOne({ _id: new ObjectId(id) })
+        res.json(result);
+      } catch (error) {
+        res.status(500).json({ message: "Failed to delete destination" })
+      }
+    })
+
+    // ─── BOOKING ROUTES ───────────────────────────────────────────────────
+
+    app.post("/booking", verifyToken, async (req, res) => {
+      try {
+        const bookingData = req.body;
+
+        if (req.user?.email !== bookingData.studentEmail) {
+          return res.status(403).json({ message: "Forbidden: Email mismatch" })
+        }
+
+        const result = await bookingCollection.insertOne(bookingData);
+        res.json(result);
+      } catch (error) {
+        res.status(500).json({ message: "Failed to create booking" })
+      }
+    })
+
+    app.get("/booking/:studentEmail", verifyToken, async (req, res) => {
+      try {
+        const { studentEmail } = req.params;
+
+        if (req.user?.email !== studentEmail) {
+          return res.status(403).json({ message: "Forbidden: Email mismatch" })
+        }
+
+        const result = await bookingCollection.find({ studentEmail }).toArray();
+        res.json(result);
+      } catch (error) {
+        res.status(500).json({ message: "Failed to fetch bookings" })
+      }
+    })
+
+    app.delete("/booking/:bookingId", verifyToken, async (req, res) => {
+      try {
+        const { bookingId } = req.params;
+
+        const existing = await bookingCollection.findOne({ _id: new ObjectId(bookingId) })
+        if (!existing) {
+          return res.status(404).json({ message: "Booking not found" })
+        }
+        if (existing.studentEmail !== req.user?.email) {
+          return res.status(403).json({ message: "Forbidden: Not your booking" })
+        }
+
+        const result = await bookingCollection.deleteOne({ _id: new ObjectId(bookingId) })
+        res.json(result)
+      } catch (error) {
+        res.status(500).json({ message: "Failed to delete booking" })
+      }
+    })
 
   } finally {
-    // Ensures that the client will close when you finish/error
     // await client.close();
   }
-
-
-
-
 }
+
 run().catch(console.dir);
+
 app.get('/', (req, res) => {
   res.send('Server is running smoothly')
 })
 
 app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`)
+  console.log(`Server listening on port ${port}`)
 })
