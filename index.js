@@ -72,12 +72,14 @@ app.post("/destination", async (req,res)=> {
   const result = await destinationCollection.insertOne(destinationData)
   res.json(result);
 }) 
+
 //midleware
 app.get("/destination/:id",verifyToken, async (req,res)=>{
   const {id} = req.params;
   const result = await destinationCollection.findOne({_id: new ObjectId(id)})
   res.json(result);
 });
+
 
 app.patch("/destination/:id",async(req,res)=>{
   const {id} = req.params
@@ -103,6 +105,7 @@ app.get("/booking/:studentEmail",verifyToken, async (req, res) => {
   const result = await bookingCollection.find({ studentEmail }).toArray();
   res.json(result);
 });
+
 
 
 
