@@ -7,7 +7,15 @@ dotenv.config();
 const uri = process.env.URI;
 const app = express()
 const port = process.env.PORT;
-app.use(cors())
+// app.use(cors())
+app.use(cors({
+  origin: [
+    "http://localhost:3000", 
+    "https://medi-queue-tutor-client.vercel.app"
+  ],
+  credentials: true
+}));
+//end here
 app.use(express.json())
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
