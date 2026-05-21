@@ -52,10 +52,47 @@ console.log("Pinged your deployment. You successfully connected to MongoDB!");
 const db = client.db("wanderlust")
 const destinationCollection = db.collection("destinations")
 const bookingCollection = db.collection("bookings")
-app.get("/destination",async (req,res) => {
-const result = await destinationCollection.find().toArray();
-res.json(result);
-})
+// app.get("/destination",async (req,res) => {
+// const result = await destinationCollection.find().toArray();
+// res.json(result);
+// })
+app.get("/destination", async (req, res) => {
+  try {
+    const { search, startDate, endDate } = req.query;
+    let query = {};
+
+    // 1. Case-insensitive search by tutor name using $regex
+    if (search) {
+      query.tutorName = { $regex: search, $options: "i" };
+    }
+
+    // 2. Date filtering using $gte and $lte
+    // Note: This assumes your dates are stored as ISO Strings/Dates in the database.
+    if (startDate || endDate) {
+      query.sessionStartDate = {};
+
+      if (startDate) {
+        // Matches dates Greater Than or Equal to the start date
+        query.sessionStartDate.$gte = new Date(startDate).toISOString();
+      }
+
+      if (endDate) {
+        // Matches dates Less Than or Equal to the end date
+        query.sessionStartDate.$lte = new Date(endDate).toISOString();
+      }
+    }
+
+    // 3. Pass the generated query object into find()
+    const result = await destinationCollection.find(query).toArray();
+    res.json(result);
+
+  } catch (error) {
+    console.error("Error fetching tutors:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// end here
 app.post("/destination", async (req,res)=> {
 const destinationData = req.body;
 const result = await destinationCollection.insertOne(destinationData)
