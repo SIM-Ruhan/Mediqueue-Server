@@ -138,7 +138,7 @@ res.json(result);
 })
 
 
-app.get("/booking/:studentEmail", async (req, res) => {
+app.get("/booking/:studentEmail",verifyToken, async (req, res) => {
 const { studentEmail } = req.params;
 const result = await bookingCollection.find({ studentEmail }).toArray();
 res.json(result);
@@ -150,7 +150,7 @@ const {id} = req.params;
 const result = await destinationCollection.deleteOne({_id: new ObjectId(id)})
 res.json(result);
 })
-app.delete("/booking/:bookingId",async(req,res)=>{
+app.delete("/booking/:bookingId",verifyToken,async(req,res)=>{
 const {bookingId} = req.params;
 const result = await bookingCollection.deleteOne({_id: new ObjectId(bookingId)})
 res.json(result)
