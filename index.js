@@ -20,28 +20,45 @@ deprecationErrors: true,
 const JWKS =createRemoteJWKSet(
 new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
 )
-const  verifyToken = async(req,res,next) =>{
-const authHeader = req?.headers.authorization
-if(!authHeader){
-return res.status(401).json({
-message: "Unauthorized"
-  })
-}
-const token = authHeader.split(" ")[1]
-if(!token){
-return res.status(401).json({
-message: "Unauthorized"
-  })
-}
-try{
-const {payload} = await jwtVerify(token, JWKS)
-next()
-}catch(error){
-return res.status(403).json({
-message: "Forbidden"
-})
-}
-}
+const verifyToken = async (req, res, next) => {
+  console.log("=== [verifyToken] Middleware Started ===");
+  
+  const authHeader = req?.headers.authorization;
+  console.log("[verifyToken] Auth Header:", authHeader ? "Received" : "Not Found");
+
+  if (!authHeader) {
+    console.error("[verifyToken] Error: Authorization header is missing. Returning 401.");
+    return res.status(401).json({
+      message: "Unauthorized"
+    });
+  }
+
+  const token = authHeader.split(" ")[1];
+  console.log("[verifyToken] Extracted Token:", token ? `Token starts with: ${token.substring(0, 10)}...` : "None");
+
+  if (!token) {
+    console.error("[verifyToken] Error: Token format is invalid or missing after 'Bearer'. Returning 401.");
+    return res.status(401).json({
+      message: "Unauthorized"
+    });
+  }
+
+  try {
+    console.log("[verifyToken] Attempting to verify token with JWKS...");
+    const { payload } = await jwtVerify(token, JWKS);
+    
+    console.log("[verifyToken] Success: Token verified properly!");
+    console.log("[verifyToken] Token Payload:", payload);
+    
+    console.log("=== [verifyToken] Passing to next() ===");
+    next();
+  } catch (error) {
+    console.error("[verifyToken] Error: Token verification failed!", error.message);
+    return res.status(403).json({
+      message: "Forbidden"
+    });
+  }
+};
 async function run() {
 try {
 // Connect the client to the server (optional starting in v4.7)
@@ -119,11 +136,15 @@ const bookingData = req.body;
 const result = await bookingCollection.insertOne(bookingData);
 res.json(result);
 })
+
+
 app.get("/booking/:studentEmail",verifyToken, async (req, res) => {
 const { studentEmail } = req.params;
 const result = await bookingCollection.find({ studentEmail }).toArray();
 res.json(result);
 });
+
+
 app.delete("/destination/:id", async(req,res)=> {
 const {id} = req.params;
 const result = await destinationCollection.deleteOne({_id: new ObjectId(id)})
