@@ -8,7 +8,7 @@ const uri = process.env.URI;
 const app = express()
 const port = process.env.PORT;
  app.use(cors())
-//end here
+
 app.use(express.json())
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -79,28 +79,21 @@ app.get("/destination", async (req, res) => {
     const { search, startDate, endDate } = req.query;
     let query = {};
 
-    // 1. Case-insensitive search by tutor name using $regex
     if (search) {
       query.tutorName = { $regex: search, $options: "i" };
     }
 
-    // 2. Date filtering using $gte and $lte
-    // Note: This assumes your dates are stored as ISO Strings/Dates in the database.
     if (startDate || endDate) {
       query.sessionStartDate = {};
 
       if (startDate) {
-        // Matches dates Greater Than or Equal to the start date
         query.sessionStartDate.$gte = new Date(startDate).toISOString();
       }
 
       if (endDate) {
-        // Matches dates Less Than or Equal to the end date
         query.sessionStartDate.$lte = new Date(endDate).toISOString();
       }
     }
-
-    // 3. Pass the generated query object into find()
     const result = await destinationCollection.find(query).toArray();
     res.json(result);
 
