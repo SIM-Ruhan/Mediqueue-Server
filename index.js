@@ -132,7 +132,7 @@ res.json(result);
 })
 
 
-app.get("/booking/:studentEmail", async (req, res) => {
+app.get("/booking/:studentEmail",verifyToken, async (req, res) => {
 const { studentEmail } = req.params;
 const result = await bookingCollection.find({ studentEmail }).toArray();
 res.json(result);
