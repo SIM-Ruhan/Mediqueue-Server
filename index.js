@@ -97,6 +97,10 @@ const {bookingId} = req.params;
 const result = await bookingCollection.deleteOne({_id: new ObjectId(bookingId)})
 res.json(result)
 })
+
+
+
+
   } finally {
 // Ensures that the client will close when you finish/error
 // await client.close();
