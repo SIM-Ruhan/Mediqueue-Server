@@ -129,7 +129,7 @@ const result = await destinationCollection.updateOne(
 res.json(result);
 }
   )
-app.post(`/booking`,verifyToken, async(req,res)=>{
+app.post(`/booking`, async(req,res)=>{
 const bookingData = req.body;
 const result = await bookingCollection.insertOne(bookingData);
 res.json(result);
